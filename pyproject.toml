@@ -20,3 +20,15 @@ dependencies = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# [VALIDATOR FIX - Attempt 1]
+# [PROBLEM]: Hatch build fails - "Unable to determine which files to ship inside the wheel"
+# [CAUSE]: No package directory matching project name (matsuzawa_20260220) exists, and no build configuration specified
+# [FIX]: Added tool.hatch.build.targets.wheel configuration to specify src directory as the package source
+#
+# [OLD CODE]:
+# (no hatch configuration section)
+#
+# [NEW CODE]:
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
