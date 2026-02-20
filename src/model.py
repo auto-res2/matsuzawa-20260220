@@ -107,11 +107,28 @@ def build_cot_prompt(question: str, method: str = "standard") -> str:
     Returns:
         Formatted prompt string
     """
+    # [VALIDATOR FIX - Attempt 1]
+    # [PROBLEM]: Low accuracy (14.5%) - answers not being extracted correctly from model outputs
+    # [CAUSE]: Prompt doesn't specify a clear format for the final answer, leading to inconsistent formats
+    #          that the extraction regex fails to parse
+    # [FIX]: Updated prompt to explicitly request the answer in GSM8K standard format (#### <answer>)
+    #
+    # [OLD CODE]:
+    # prompt = f"""Solve the following math problem step by step. Show your reasoning clearly.
+    #
+    # Problem: {question}
+    #
+    # Let's solve this step by step:"""
+    #
+    # [NEW CODE]:
     prompt = f"""Solve the following math problem step by step. Show your reasoning clearly.
 
 Problem: {question}
 
-Let's solve this step by step:"""
+Let's solve this step by step, and provide the final numeric answer at the end in the format:
+#### <final answer>
+
+Solution:"""
     
     return prompt
 

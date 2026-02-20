@@ -25,36 +25,35 @@ def extract_final_answer(rationale: str) -> str:
         Extracted numeric answer
     """
     # [VALIDATOR FIX - Attempt 1]
-    # [PROBLEM]: Zero accuracy on all samples - answers not being extracted correctly
-    # [CAUSE]: GPT-4o-mini outputs answers in bold markdown format like "**18**", "**$64**", "**260 sheep**"
-    #          which don't match the existing regex patterns
-    # [FIX]: Added patterns to handle markdown bold formatting, boxed LaTeX answers, and improved number extraction
+    # [PROBLEM]: Low accuracy (14.5%) - answers not being extracted correctly from model outputs
+    # [CAUSE]: Extraction patterns not prioritizing the GSM8K #### format that we're now explicitly requesting
+    # [FIX]: Reordered patterns to prioritize #### format first, improved pattern specificity
     #
     # [OLD CODE]:
     # patterns = [
-    #     r"(?:final answer|answer|result|solution)(?:\s+is)?[:\s]+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
-    #     r"####\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",  # GSM8K format
-    #     r"=\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*$",  # Ends with = number
-    #     r"\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*$",  # Last number in text
+    #     r"\*\*[^\d]*?(-?\d+(?:,\d{3})*(?:\.\d+)?)[^\*]*?\*\*",
+    #     r"\\boxed\{(-?\d+(?:,\d{3})*(?:\.\d+)?)\}",
+    #     r"####\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
+    #     ...
     # ]
     #
     # [NEW CODE]:
-    # Look for common answer patterns (ordered from most specific to least specific)
+    # Look for answer patterns (ordered from most specific to least specific)
     patterns = [
-        # Markdown bold - extract first number from any bold text
-        r"\*\*[^\d]*?(-?\d+(?:,\d{3})*(?:\.\d+)?)[^\*]*?\*\*",
+        # GSM8K format with #### (highest priority - we explicitly request this)
+        r"####\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
         # LaTeX boxed format
         r"\\boxed\{(-?\d+(?:,\d{3})*(?:\.\d+)?)\}",
-        # GSM8K format with ####
-        r"####\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
-        # "final answer is/:" patterns
-        r"(?:final answer|answer is|result is|solution is)[:\s]+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
-        # "the answer is" at end
-        r"(?:the answer is|answer:)\s+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)(?:\s+|\.|\*|$)",
-        # Number at end of line with optional period/asterisk
-        r"=\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:\.|$)",
-        # Last number in text (most permissive - use last)
-        r"(?:^|\s)\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:\.|$)",
+        # "final answer" phrases followed by number
+        r"(?:final answer|the final answer is|final numeric answer)[:\s]+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
+        # "answer is" / "result is" patterns
+        r"(?:answer is|result is|solution is)[:\s]+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
+        # Markdown bold - extract number from bold text (near end of response)
+        r"\*\*\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*\*\*(?!.*\d)",
+        # Number at end after "the answer is"
+        r"(?:the answer is|answer:)\s+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\.?\s*$",
+        # Equation at end: something = number
+        r"=\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*\.?\s*$",
     ]
     
     for pattern in patterns:
@@ -63,8 +62,15 @@ def extract_final_answer(rationale: str) -> str:
             answer = match.group(1).replace(",", "")
             return answer
     
-    # Fallback: return the rationale itself
-    return rationale.strip()
+    # Fallback: try to find the last number in the text (less reliable but better than returning full text)
+    # Look for the last standalone number
+    all_numbers = re.findall(r'\b(-?\d+(?:,\d{3})*(?:\.\d+)?)\b', rationale)
+    if all_numbers:
+        # Return the last number found, removing commas
+        return all_numbers[-1].replace(",", "")
+    
+    # If no number found at all, return empty string (this will be marked as incorrect)
+    return ""
 
 
 def sample_cot_chains(
