@@ -107,11 +107,33 @@ def build_cot_prompt(question: str, method: str = "standard") -> str:
     Returns:
         Formatted prompt string
     """
+    # [VALIDATOR FIX - Attempt 2]
+    # [PROBLEM]: Low accuracy (16.5%) - model not providing clear final answer format
+    # [CAUSE]: Prompt doesn't explicitly instruct model to format the final answer clearly,
+    #          leading to extraction failures or extraction of intermediate numbers
+    # [FIX]: Added explicit instruction to provide final answer in a clear format (#### or bold)
+    #        to ensure reliable extraction
+    #
+    # [OLD CODE]:
+    # prompt = f"""Solve the following math problem step by step. Show your reasoning clearly.
+    #
+    # Problem: {question}
+    #
+    # Let's solve this step by step:"""
+    #
+    # [NEW CODE]:
     prompt = f"""Solve the following math problem step by step. Show your reasoning clearly.
 
 Problem: {question}
 
-Let's solve this step by step:"""
+Let's solve this step by step:
+1. Think through the problem carefully
+2. Show each calculation
+3. At the end, clearly state your final answer
+
+IMPORTANT: Put your final numeric answer (just the number) at the very end in one of these formats:
+- #### [your answer]
+- The answer is **[your answer]**"""
     
     return prompt
 
