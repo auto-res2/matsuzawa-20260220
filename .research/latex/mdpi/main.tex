@@ -31,6 +31,8 @@
 %=================================================================
 % Add packages and commands here. The following packages are loaded in our class file: fontenc, inputenc, calc, indentfirst, fancyhdr, graphicx, epstopdf, lastpage, ifthen, float, amsmath, amssymb, lineno, setspace, enumitem, mathpazo, booktabs, titlesec, etoolbox, tabto, xcolor, colortbl, soul, multirow, microtype, tikz, totcount, changepage, attrib, upgreek, array, tabularx, pbox, ragged2e, tocloft, marginnote, marginfix, enotez, amsthm, natbib, hyperref, cleveref, scrextend, url, geometry, newfloat, caption, draftwatermark, seqsplit
 % cleveref: load \crefname definitions after \begin{document}
+\usepackage{algorithm}
+\usepackage{algorithmic}
 
 %=================================================================
 % Please use the following mathematics environments: Theorem, Lemma, Corollary, Proposition, Characterization, Property, Problem, Example, ExamplesandDefinitions, Hypothesis, Remark, Definition, Notation, Assumption
@@ -41,7 +43,7 @@
 \Title{Selective Falsification for Budget-Aware Self-Consistency in Chain-of-Thought Math Reasoning}
 
 % Author Orchid ID: enter ID or remove command
-\newcommand{\orcidauthorA}{0000-0000-0000-000X} % Add \orcidA{} behind the author's name
+\newcommand{\orcidauthorA}{0000{-}0000{-}0000{-}000X} % Add \orcidA{} behind the author's name
 %\newcommand{\orcidauthorB}{0000-0000-0000-000X} % Add \orcidB{} behind the author's name
 
 % Authors, for the paper (add full first names)
@@ -58,7 +60,7 @@ $^{1}$ \quad Affiliation 1; e-mail@e-mail.com\\
 $^{2}$ \quad Affiliation 2; e-mail@e-mail.com}
 
 % Contact information of the corresponding author
-\corres{Correspondence: e-mail@e-mail.com; Tel.: (optional; include country code; if there are multiple corresponding authors, add author initials) +xx-xxxx-xxx-xxxx (F.L.)}
+\corres{Correspondence: e-mail@e-mail.com; Tel.\@: (optional; include country code; if there are multiple corresponding authors, add author initials) +xx-xxxx-xxx-xxxx (F.L.)}
 
 % Current address and/or shared authorship
 %\firstnote{Current address: Affiliation.}
@@ -128,15 +130,15 @@ $^{2}$ \quad Affiliation 2; e-mail@e-mail.com}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Introduction}
 
-Chain-of-thought (CoT) prompting has become a standard inference-time technique for eliciting multi-step reasoning from large language models (LLMs) without fine-tuning. By prompting a model to ``solve step by step'' and produce intermediate natural-language reasoning, CoT can substantially improve performance on tasks that require multiple arithmetic or logical steps compared with directly prompting for the final answer, particularly at larger model scales \cite{wei-2022-chain}. At the same time, CoT does not guarantee correctness or faithfulness: a model can generate fluent reasoning that contains subtle arithmetic slips or incorrect assumptions, and stochastic decoding can produce different rationales and different answers for the same question \cite{wei-2022-chain}. This variability is especially consequential in settings where one seeks improved reliability without changing model weights, for example when only prompting is available.
+Chain-of-thought (CoT) prompting has become a standard inference-time technique for eliciting multi-step reasoning from large language models (LLMs) without fine-tuning. By prompting a model to ``solve step by step'' and produce intermediate natural-language reasoning, CoT can substantially improve performance on tasks that require multiple arithmetic or logical steps compared with directly prompting for the final answer, particularly at larger model scales~\cite{wei-2022-chain}. At the same time, CoT does not guarantee correctness or faithfulness: a model can generate fluent reasoning that contains subtle arithmetic slips or incorrect assumptions, and stochastic decoding can produce different rationales and different answers for the same question~\cite{wei-2022-chain}. This variability is especially consequential in settings where one seeks improved reliability without changing model weights, for example when only prompting is available.
 
-Self-consistency (SC) is a widely used aggregation approach that attempts to stabilize CoT outcomes at inference time. Instead of trusting a single sampled chain, SC generates $K$ independent CoT samples and selects the most frequent extracted final answer via majority vote \cite{das-2022-self}. When errors are diverse and relatively uncorrelated, majority voting can outperform any single sample by amplifying the most probable correct solution path.
+Self-consistency (SC) is a widely used aggregation approach that attempts to stabilize CoT outcomes at inference time. Instead of trusting a single sampled chain, SC generates $K$ independent CoT samples and selects the most frequent extracted final answer via majority vote~\cite{das-2022-self}. When errors are diverse and relatively uncorrelated, majority voting can outperform any single sample by amplifying the most probable correct solution path.
 
 However, SC makes a strong implicit assumption: it treats sampled chains as exchangeable evidence and equates the frequency of an answer with its likelihood of being correct. This assumption becomes brittle when samples are correlated through shared misconceptions. In that regime, increasing $K$ can simply increase the frequency of the same wrong answer rather than revealing an alternative correct hypothesis. A seemingly natural extension is to weight each sample's vote by a confidence score obtained from a verifier prompt. In practice, such per-sample verification can (i) depend on self-reported confidence that may be miscalibrated, and (ii) increase compute because it adds an additional verifier call for each of the $K$ chains.
 
 This paper targets a prompt-only gap: an aggregation rule that (a) is less sensitive to shared misconceptions than pure frequency voting by explicitly attempting falsification, and (b) can be more sample-efficient by verifying only a small number of answer hypotheses rather than verifying every sampled chain. We propose Selective Falsification-Weighted Self-Consistency (SFw-SC-CoT), a simple, inference-only algorithm that reframes SC as hypothesis testing. The method first samples $K$ CoT solutions, clusters them by unique extracted final answer, and then runs a deterministic verifier once per unique answer hypothesis. The verifier is asked to try to disprove the hypothesis using three explicit sanity checks: a magnitude estimate, an alternative recomputation, and a constraint check based on the problem statement. It outputs two structured signals: a confidence $c(a) \in [0,1]$ and a discrete checks-passed count $p(a) \in \{0,1,2,3\}$. We then select the answer with the highest score under a budget-aware aggregation rule that down-weights frequency so that popularity alone cannot dominate.
 
-We evaluate SFw-SC-CoT using the provided codebase on GSM8K test problems. In the executed experiment, both baseline SC and SFw-SC-CoT use the same generation budget ($K = 8$ CoT samples, temperature $0.7$, max\_tokens $512$) and the same model (gpt-4o-mini). The baseline uses majority voting over extracted answers; the proposed method performs answer-level falsification verification and weighted aggregation. On $N = 200$ GSM8K test problems, the proposed method achieves $0.94$ accuracy ($188/200$) compared with $0.93$ ($186/200$) for SC.
+We evaluate SFw-SC-CoT using the provided codebase on GSM8K test problems. In the executed experiment, both baseline SC and SFw-SC-CoT use the same generation budget ($K = 8$ CoT samples, temperature $0.7$, max\_tokens $512$) and the same model (gpt-4o-mini). The baseline uses majority voting over extracted answers; the proposed method performs answer-level falsification verification and weighted aggregation. On $N = 200$ GSM8K test problems, the proposed method achieves $0.94$ accuracy ($188/200$) compared with $0.93$ ($186/200$) for SC\@.
 
 \subsection{Contributions}
 \begin{itemize}
@@ -150,9 +152,9 @@ The current results are intentionally narrow, reflecting what was actually execu
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Related Work}
 
-CoT prompting is a foundational inference-time method for improving multi-step reasoning performance in LLMs without weight updates \cite{wei-2022-chain}. Its primary relevance to our setting is twofold. First, it provides the mechanism for producing explicit intermediate reasoning steps that often help models solve arithmetic word problems. Second, it exposes a reliability issue: models may produce plausible but incorrect reasoning traces, and stochastic generation can lead to multiple distinct solutions and answers for the same input \cite{wei-2022-chain}. These properties motivate aggregation methods that can exploit diversity across samples.
+CoT prompting is a foundational inference-time method for improving multi-step reasoning performance in LLMs without weight updates~\cite{wei-2022-chain}. Its primary relevance to our setting is twofold. First, it provides the mechanism for producing explicit intermediate reasoning steps that often help models solve arithmetic word problems. Second, it exposes a reliability issue: models may produce plausible but incorrect reasoning traces, and stochastic generation can lead to multiple distinct solutions and answers for the same input~\cite{wei-2022-chain}. These properties motivate aggregation methods that can exploit diversity across samples.
 
-Self-consistency (SC) is a prominent aggregation strategy that samples multiple CoT chains and returns the most frequent final answer \cite{das-2022-self}. Relative to single-shot CoT, SC trades additional inference compute for improved robustness to decoding randomness. The key assumption is that the correct solution path is sampled more often than any particular incorrect path; under this assumption, majority vote increases the probability of returning the correct answer.
+Self-consistency (SC) is a prominent aggregation strategy that samples multiple CoT chains and returns the most frequent final answer~\cite{das-2022-self}. Relative to single-shot CoT, SC trades additional inference compute for improved robustness to decoding randomness. The key assumption is that the correct solution path is sampled more often than any particular incorrect path; under this assumption, majority vote increases the probability of returning the correct answer.
 
 Our work is closest to SC but differs in both the evidential model and the compute allocation. SC effectively assumes exchangeability of sampled chains: each chain contributes one unit vote, and frequency is the sole criterion for selection. This makes SC vulnerable when samples share a systematic misconception, because correlated errors can become the majority. SFw-SC-CoT modifies the SC pipeline by treating distinct final answers as hypotheses and introducing an explicit falsification-oriented verification step at the hypothesis level. Instead of verifying each chain (which would scale verification compute linearly with $K$), we verify each unique answer hypothesis. This design aims to reduce the number of verifier calls from $K$ to $U$, where $U$ is the number of distinct extracted answers observed among the $K$ samples.
 
@@ -169,10 +171,10 @@ This work focuses on multi-step math word problems where the desired output is a
 Let $q$ denote a natural-language problem. A stochastic CoT generator produces $K$ samples. Each sample $i$ yields a rationale $r_i$ (the generated reasoning text) and an extracted final numeric answer $a_i$. Samples are grouped by identical extracted answers. For any candidate answer string $a$, define $G(a)$ as the set of rationales that end in $a$, that is, $G(a) = \{ r_i : a_i = a \}$. Let $U$ be the number of unique answers with non-empty groups.
 
 \subsection{Baseline self-consistency}
-Standard SC aggregates by majority vote over extracted final answers, returning $\arg\max_a |G(a)|$ \cite{das-2022-self}. In effect, it estimates that an answer is correct if it is sampled most frequently among the $K$ chains.
+Standard SC aggregates by majority vote over extracted final answers, returning $\arg\max_a |G(a)|$~\cite{das-2022-self}. In effect, it estimates that an answer is correct if it is sampled most frequently among the $K$ chains.
 
 \subsection{Answer extraction and normalization}
-The implementation extracts a final numeric answer from a rationale using a prioritized list of regular expressions. These patterns are designed to handle common answer formats observed in practice, including GSM8K-style ``\#\#\#\# 42'', explicit ``Answer:'' phrases, markdown bold numbers, and boxed answers, with a final permissive fallback that selects the last number appearing in the text. Ground-truth labels are extracted from GSM8K solutions primarily using the ``\#\#\#\#'' delimiter. For evaluation, predicted and ground-truth answers are normalized by removing commas, stripping certain symbols such as ``\$'', removing spaces, and converting to a canonical numeric string so that integer and decimal representations (for example, ``5'' and ``5.0'') compare as equal.
+The implementation extracts a final numeric answer from a rationale using a prioritized list of regular expressions. These patterns are designed to handle common answer formats observed in practice, including GSM8K-style \verb|#### 42|, explicit ``Answer:'' phrases, markdown bold numbers, and boxed answers, with a final permissive fallback that selects the last number appearing in the text. Ground-truth labels are extracted from GSM8K solutions primarily using the ``\#\#\#\#'' delimiter. For evaluation, predicted and ground-truth answers are normalized by removing commas, stripping certain symbols such as ``\$'', removing spaces, and converting to a canonical numeric string so that integer and decimal representations (for example, ``5'' and ``5.0'') compare as equal.
 
 \subsection{Answer-hypothesis verification signals}
 SFw-SC-CoT introduces verification at the level of answer hypotheses. For each candidate answer $a$, a verifier prompt is constructed from the problem $q$, the proposed answer $a$, and up to $L$ representative rationales from $G(a)$. Representatives are selected by sorting rationales by length and choosing the shortest ones, reducing prompt length and limiting reliance on a single verbose chain. The verifier is instructed to attempt falsification via three sanity checks: (1) estimation or order-of-magnitude reasoning, (2) a brief alternative recomputation, and (3) a constraint check for consistency with the problem statement. The verifier output is parsed to obtain two scalars: confidence $c(a) \in [0,1]$ and checks\_passed $p(a) \in \{0,1,2,3\}$. These signals serve as inputs to the proposed aggregation rule.
@@ -192,7 +194,7 @@ Third, it verifies each answer hypothesis once using a deterministic verifier pr
 
 Fourth, it computes a score for each hypothesis and returns the highest-scoring answer. The aggregation rule is multiplicative and exponentiated:
 \[
-\mathrm{score}(a) = \left(\frac{|G(a)|}{K}\right)^{\alpha} \cdot \left(c(a)\right)^{\beta} \cdot \left(\frac{p(a)}{3}\right)^{\gamma}.
+\mathrm{score}(a) = \left(\frac{|G(a)|}{K}\right)^{{\alpha}} \cdot \left(c(a)\right)^{{\beta}} \cdot \left(\frac{p(a)}{3}\right)^{{\gamma}}.
 \]
 In the executed proposed configuration, $\alpha = 0.5$, $\beta = 1.0$, and $\gamma = 1.0$. Compared with SC majority vote (which corresponds to $\alpha = 1$ and omits verification terms), this choice down-weights the impact of raw frequency so that a frequent hypothesis can be penalized if it fails falsification checks or receives low verifier confidence. The checks\_passed term is normalized by $3$ to map it into $[0,1]$. If parsing fails, the parser defaults checks\_passed to $0$ and confidence to $0.5$ and clips both to valid ranges.
 
@@ -201,16 +203,16 @@ The key design choice is verifying answer hypotheses rather than individual chai
 \begin{algorithm}[H]
 \caption{SFw-SC-CoT (Selective Falsification-Weighted Self-Consistency)}
 \begin{algorithmic}[1]
-\State \textbf{Input:} problem $q$, sampler, verifier, sample count $K$, reps limit $L$, exponents $\alpha,\beta,\gamma$
-\State Sample CoT rationales $\{r_i\}_{i=1}^K$ with stochastic decoding
-\State Extract answers $a_i \leftarrow \mathrm{Extract}(r_i)$ for $i \in \{1,\ldots,K\}$
-\State Group rationales by answer: $G(a) \leftarrow \{r_i : a_i = a\}$ for each unique $a$
-\For{each unique answer $a$}
-  \State Select representatives $R(a) \leftarrow$ shortest $\min(L, |G(a)|)$ rationales from $G(a)$
-  \State $(c(a), p(a)) \leftarrow \mathrm{Verify}(q, a, R(a))$ \Comment{deterministic, falsification checks}
-  \State $s(a) \leftarrow \left(\frac{|G(a)|}{K}\right)^{\alpha} \cdot \left(c(a)\right)^{\beta} \cdot \left(\frac{p(a)}{3}\right)^{\gamma}$
-\EndFor
-\State \textbf{Return} $\arg\max_a s(a)$
+\STATE \textbf{Input:} problem $q$, sampler, verifier, sample count $K$, reps limit $L$, exponents $\alpha,\beta,\gamma$
+\STATE Sample CoT rationales $\{r_i\}_{i=1}^K$ with stochastic decoding
+\STATE Extract answers $a_i \leftarrow \mathrm{Extract}(r_i)$ for $i \in \{1,\ldots,K\}$
+\STATE Group rationales by answer: $G(a) \leftarrow \{r_i : a_i = a\}$ for each unique $a$
+\FOR{each unique answer $a$}
+  \STATE Select representatives $R(a) \leftarrow$ shortest $\min(L, |G(a)|)$ rationales from $G(a)$
+  \STATE $(c(a), p(a)) \leftarrow \mathrm{Verify}(q, a, R(a))$ \COMMENT{deterministic, falsification checks}
+  \STATE $s(a) \leftarrow \left(\frac{|G(a)|}{K}\right)^{{\alpha}} \cdot \left(c(a)\right)^{{\beta}} \cdot \left(\frac{p(a)}{3}\right)^{{\gamma}}$
+\ENDFOR
+\STATE \textbf{Return} $\arg\max_a s(a)$
 \end{algorithmic}
 \end{algorithm}
 
@@ -223,7 +225,7 @@ We evaluate SFw-SC-CoT against a standard self-consistency baseline on GSM8K. Th
 The task is to answer multi-step math word problems with a single numeric output. We use the GSM8K dataset, main subset, test split. The dataset is loaded via the HuggingFace datasets interface under the identifier \texttt{openai/gsm8k} with subset \texttt{main}. The run configuration sets max\_samples to $200$, and the logs indicate that exactly $N = 200$ test problems were processed.
 
 \subsection{Model and access method}
-Both baseline and proposed methods use the same model: gpt-4o-mini with base\_model gpt-4o-mini-2024-07-18 accessed through the OpenAI chat completions API. The codebase wraps the API in an \texttt{LLMModel} class that issues a separate generation call for each prompt.
+Both baseline and proposed methods use the same model: gpt-4o-mini with base\_model gpt-4o-mini-2024{-}07{-}18 accessed through the OpenAI chat completions API\@. The codebase wraps the API in an \texttt{LLMModel} class that issues a separate generation call for each prompt.
 
 \subsection{Generation and sampling protocol}
 For each problem, both methods generate $K = 8$ chain-of-thought samples using temperature $0.7$ and max\_tokens $512$. Inference uses batch\_size $1$. Each completion is post-processed using the \texttt{extract\_final\_answer} function described in the Background section.
@@ -259,29 +261,25 @@ The WandB summaries report wall-clock runtime. The SC run has runtime $1801$ sec
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.7\linewidth]{images/comparative-1-gpt4o-mini-gsm8k_accuracy.pdf}
-\caption{Accuracy over time for SC baseline on GSM8K ($N = 200$); higher values indicate better performance.}
-\label{fig:gsm8k-sc-trace}
+\caption{Accuracy over time for SC baseline on GSM8K ($N = 200$); higher values indicate better performance.}\label{fig:gsm8k-sc-trace}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.7\linewidth]{images/proposed-gpt4o-mini-gsm8k_accuracy.pdf}
-\caption{Accuracy over time for SFw-SC-CoT on GSM8K ($N = 200$); higher values indicate better performance.}
-\label{fig:gsm8k-sfwsc-trace}
+\caption{Accuracy over time for SFw-SC-CoT on GSM8K ($N = 200$); higher values indicate better performance.}\label{fig:gsm8k-sfwsc-trace}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.7\linewidth]{images/comparison_accuracy.pdf}
-\caption{Final accuracy comparison across methods on GSM8K ($N = 200$); higher values indicate better performance.}
-\label{fig:gsm8k-accuracy-bar}
+\caption{Final accuracy comparison across methods on GSM8K ($N = 200$); higher values indicate better performance.}\label{fig:gsm8k-accuracy-bar}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.7\linewidth]{images/comparison_accuracy_over_time.pdf}
-\caption{Accuracy over time overlay for SC vs SFw-SC-CoT on GSM8K ($N = 200$); higher values indicate better performance.}
-\label{fig:gsm8k-accuracy-overlay}
+\caption{Accuracy over time overlay for SC vs SFw-SC-CoT on GSM8K ($N = 200$); higher values indicate better performance.}\label{fig:gsm8k-accuracy-overlay}
 \end{figure}
 
 The final accuracies visualized in Figure~\ref{fig:gsm8k-accuracy-bar} match the WandB summaries ($0.93$ for SC and $0.94$ for SFw-SC-CoT). The per-run traces (Figure~\ref{fig:gsm8k-sc-trace} and Figure~\ref{fig:gsm8k-sfwsc-trace}) and overlay plot (Figure~\ref{fig:gsm8k-accuracy-overlay}) report accuracy as examples are processed.
@@ -307,7 +305,7 @@ The current evaluation also highlights clear next steps. The logs do not report 
 \vspace{6pt}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\authorcontributions{For research articles with several authors, a short paragraph specifying their individual contributions must be provided. The following statements should be used ``Conceptualization, X.X. and Y.Y.; methodology, X.X.; software, X.X.; validation, X.X., Y.Y. and Z.Z.; formal analysis, X.X.; investigation, X.X.; resources, X.X.; data curation, X.X.; writing---original draft preparation, X.X.; writing---review and editing, X.X.; visualization, X.X.; supervision, X.X.; project administration, X.X.; funding acquisition, Y.Y. All authors have read and agreed to the published version of the manuscript.'', please turn to the  \href{http://img.mdpi.org/data/contributor-role-instruction.pdf}{CRediT taxonomy} for the term explanation. Authorship must be limited to those who have contributed substantially to the work~reported.}
+\authorcontributions{For research articles with several authors, a short paragraph specifying their individual contributions must be provided. The following statements should be used: ``Conceptualization, X.X. and Y.Y.; methodology, X.X.; software, X.X.; validation, X.X., Y.Y. and Z.Z.; formal analysis, X.X.; investigation, X.X.; resources, X.X.; data curation, X.X.; writing---original draft preparation, X.X.; writing---review and editing, X.X.; visualization, X.X.; supervision, X.X.; project administration, X.X.; funding acquisition, Y.Y. All authors have read and agreed to the published version of the manuscript.'', please turn to the  \href{http://img.mdpi.org/data/contributor-role-instruction.pdf}{CRediT taxonomy} for the term explanation. Authorship must be limited to those who have contributed substantially to the work~reported.}
 
 \funding{This research received no external funding.}
 
