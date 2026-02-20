@@ -24,12 +24,37 @@ def extract_final_answer(rationale: str) -> str:
     Returns:
         Extracted numeric answer
     """
-    # Look for common answer patterns
+    # [VALIDATOR FIX - Attempt 1]
+    # [PROBLEM]: Zero accuracy on all samples - answers not being extracted correctly
+    # [CAUSE]: GPT-4o-mini outputs answers in bold markdown format like "**18**", "**$64**", "**260 sheep**"
+    #          which don't match the existing regex patterns
+    # [FIX]: Added patterns to handle markdown bold formatting, boxed LaTeX answers, and improved number extraction
+    #
+    # [OLD CODE]:
+    # patterns = [
+    #     r"(?:final answer|answer|result|solution)(?:\s+is)?[:\s]+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
+    #     r"####\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",  # GSM8K format
+    #     r"=\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*$",  # Ends with = number
+    #     r"\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*$",  # Last number in text
+    # ]
+    #
+    # [NEW CODE]:
+    # Look for common answer patterns (ordered from most specific to least specific)
     patterns = [
-        r"(?:final answer|answer|result|solution)(?:\s+is)?[:\s]+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
-        r"####\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",  # GSM8K format
-        r"=\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*$",  # Ends with = number
-        r"\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*$",  # Last number in text
+        # Markdown bold - extract first number from any bold text
+        r"\*\*[^\d]*?(-?\d+(?:,\d{3})*(?:\.\d+)?)[^\*]*?\*\*",
+        # LaTeX boxed format
+        r"\\boxed\{(-?\d+(?:,\d{3})*(?:\.\d+)?)\}",
+        # GSM8K format with ####
+        r"####\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
+        # "final answer is/:" patterns
+        r"(?:final answer|answer is|result is|solution is)[:\s]+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)",
+        # "the answer is" at end
+        r"(?:the answer is|answer:)\s+\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)(?:\s+|\.|\*|$)",
+        # Number at end of line with optional period/asterisk
+        r"=\s*\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:\.|$)",
+        # Last number in text (most permissive - use last)
+        r"(?:^|\s)\$?\s*(-?\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:\.|$)",
     ]
     
     for pattern in patterns:
