@@ -107,33 +107,44 @@ def build_cot_prompt(question: str, method: str = "standard") -> str:
     Returns:
         Formatted prompt string
     """
-    # [VALIDATOR FIX - Attempt 2]
-    # [PROBLEM]: Low accuracy (16.5%) - model not providing clear final answer format
-    # [CAUSE]: Prompt doesn't explicitly instruct model to format the final answer clearly,
-    #          leading to extraction failures or extraction of intermediate numbers
-    # [FIX]: Added explicit instruction to provide final answer in a clear format (#### or bold)
-    #        to ensure reliable extraction
+    # [VALIDATOR FIX - Attempt 3]
+    # [PROBLEM]: Very low accuracy (12.5%) - model generating incorrect reasoning and answers
+    # [CAUSE]: Zero-shot prompting is insufficient for gpt-4o-mini on complex math problems.
+    #          The model needs examples showing proper step-by-step reasoning and answer formatting.
+    # [FIX]: Added few-shot examples demonstrating correct chain-of-thought reasoning and 
+    #        clear answer formatting (#### format) to guide the model to produce better results.
     #
     # [OLD CODE]:
     # prompt = f"""Solve the following math problem step by step. Show your reasoning clearly.
     #
     # Problem: {question}
     #
-    # Let's solve this step by step:"""
+    # Let's solve this step by step:
+    # 1. Think through the problem carefully
+    # 2. Show each calculation
+    # 3. At the end, clearly state your final answer
+    #
+    # IMPORTANT: Put your final numeric answer (just the number) at the very end in one of these formats:
+    # - #### [your answer]
+    # - The answer is **[your answer]**"""
     #
     # [NEW CODE]:
-    prompt = f"""Solve the following math problem step by step. Show your reasoning clearly.
+    prompt = f"""Solve the following math problem step by step, showing all your work.
 
-Problem: {question}
+Q: There are 15 trees in the grove. Grove workers will plant trees in the grove today. After they are done, there will be 21 trees. How many trees did the grove workers plant today?
+A: There are 15 trees originally. Then there were 21 trees after some more were planted. So there must have been 21 - 15 = 6 trees that were planted. #### 6
 
-Let's solve this step by step:
-1. Think through the problem carefully
-2. Show each calculation
-3. At the end, clearly state your final answer
+Q: If there are 3 cars in the parking lot and 2 more cars arrive, how many cars are in the parking lot?
+A: There are originally 3 cars. 2 more cars arrive. 3 + 2 = 5. #### 5
 
-IMPORTANT: Put your final numeric answer (just the number) at the very end in one of these formats:
-- #### [your answer]
-- The answer is **[your answer]**"""
+Q: Leah had 32 chocolates and her sister had 42. If they ate 35, how many pieces do they have left in total?
+A: Originally, Leah had 32 chocolates and her sister had 42. So in total they had 32 + 42 = 74. After eating 35, they had 74 - 35 = 39 pieces left in total. #### 39
+
+Q: Jason had 20 lollipops. He gave Denny some lollipops. Now Jason has 12 lollipops. How many lollipops did Jason give to Denny?
+A: Jason had 20 lollipops originally. Now he has 12 lollipops. So he gave away 20 - 12 = 8 lollipops. #### 8
+
+Q: {question}
+A: Let's solve this step by step."""
     
     return prompt
 
