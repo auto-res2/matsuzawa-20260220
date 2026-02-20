@@ -1,6 +1,15 @@
 """Evaluation script for comparing multiple runs."""
 
-import argparse
+# [VALIDATOR FIX - Attempt 1]
+# [PROBLEM]: evaluate.py expects --results_dir and --run_ids args but workflow calls it with Hydra-style args (results_dir= run_ids=)
+# [CAUSE]: Script uses argparse but workflow invokes with Hydra syntax
+# [FIX]: Changed from argparse to accept both argparse and Hydra-style arguments
+#
+# [OLD CODE]:
+# import argparse
+#
+# [NEW CODE]:
+import sys
 import json
 import os
 from pathlib import Path
@@ -250,23 +259,63 @@ def create_comparison_figures(
     print(f"Created comparison figure: {output_file}")
 
 
+def parse_arguments():
+    """Parse arguments from command line supporting both argparse and Hydra formats.
+    
+    Returns:
+        Dict with parsed arguments
+    """
+    # [VALIDATOR FIX - Attempt 1]
+    # Parse both --key=value (argparse) and key=value (Hydra) formats
+    
+    args_dict = {
+        'results_dir': None,
+        'run_ids': None,
+        'wandb_entity': None,
+        'wandb_project': None,
+    }
+    
+    for arg in sys.argv[1:]:
+        # Handle --key=value format
+        if arg.startswith('--'):
+            if '=' in arg:
+                key, value = arg[2:].split('=', 1)
+                args_dict[key] = value
+            else:
+                # Handle --key value format
+                idx = sys.argv.index(arg)
+                if idx + 1 < len(sys.argv):
+                    key = arg[2:]
+                    value = sys.argv[idx + 1]
+                    if not value.startswith('-'):
+                        args_dict[key] = value
+        # Handle key=value format (Hydra style)
+        elif '=' in arg:
+            key, value = arg.split('=', 1)
+            args_dict[key] = value
+    
+    # Validate required arguments
+    if not args_dict['results_dir']:
+        print("ERROR: results_dir is required", file=sys.stderr)
+        sys.exit(1)
+    if not args_dict['run_ids']:
+        print("ERROR: run_ids is required", file=sys.stderr)
+        sys.exit(1)
+    
+    return args_dict
+
+
 def main():
     """Main evaluation entry point."""
-    parser = argparse.ArgumentParser(description="Evaluate and compare experiment runs")
-    parser.add_argument("--results_dir", type=str, required=True, help="Results directory")
-    parser.add_argument("--run_ids", type=str, required=True, help="JSON list of run IDs")
-    parser.add_argument("--wandb_entity", type=str, default=None, help="WandB entity")
-    parser.add_argument("--wandb_project", type=str, default=None, help="WandB project")
-    
-    args = parser.parse_args()
+    args_dict = parse_arguments()
     
     # Parse run_ids
-    run_ids = json.loads(args.run_ids)
+    run_ids = json.loads(args_dict['run_ids'])
     print(f"Evaluating runs: {run_ids}")
     
     # Get WandB config (from args or env)
-    entity = args.wandb_entity or os.environ.get("WANDB_ENTITY", "airas")
-    project = args.wandb_project or os.environ.get("WANDB_PROJECT", "2026-0220-1631")
+    entity = args_dict['wandb_entity'] or os.environ.get("WANDB_ENTITY", "airas")
+    project = args_dict['wandb_project'] or os.environ.get("WANDB_PROJECT", "2026-0220-1631")
     
     print(f"WandB entity: {entity}")
     print(f"WandB project: {project}")
@@ -288,7 +337,7 @@ def main():
         return
     
     # Create output directories
-    results_dir = Path(args.results_dir)
+    results_dir = Path(args_dict['results_dir'])
     comparison_dir = results_dir / "comparison"
     
     # Export per-run metrics and figures
