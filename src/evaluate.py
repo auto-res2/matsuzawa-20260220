@@ -23,6 +23,44 @@ import seaborn as sns
 import pandas as pd
 
 
+# [VALIDATOR FIX - Attempt 2]
+# [PROBLEM]: SummarySubDict from W&B is not JSON serializable
+# [CAUSE]: dict(run.summary) doesn't recursively convert nested SummarySubDict objects
+# [FIX]: Added recursive conversion function to handle nested W&B objects
+#
+# [OLD CODE]:
+# (no conversion function existed)
+#
+# [NEW CODE]:
+def convert_to_serializable(obj: Any) -> Any:
+    """Recursively convert W&B objects to JSON-serializable types.
+    
+    Args:
+        obj: Object to convert (can be dict, list, or primitive)
+        
+    Returns:
+        JSON-serializable version of the object
+    """
+    if isinstance(obj, dict):
+        return {k: convert_to_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_to_serializable(item) for item in obj]
+    elif hasattr(obj, '_json_dict'):
+        # W&B objects with _json_dict attribute
+        return convert_to_serializable(obj._json_dict)
+    elif hasattr(obj, 'to_dict'):
+        # Objects with to_dict method
+        return convert_to_serializable(obj.to_dict())
+    elif isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    else:
+        # Fallback: try to convert to dict or return string representation
+        try:
+            return dict(obj)
+        except:
+            return str(obj)
+
+
 def fetch_run_from_wandb(
     entity: str,
     project: str,
@@ -54,8 +92,19 @@ def fetch_run_from_wandb(
     
     # Fetch data
     history = run.history()
-    summary = dict(run.summary)
-    config = dict(run.config)
+    
+    # [VALIDATOR FIX - Attempt 2]
+    # [PROBLEM]: SummarySubDict is not JSON serializable
+    # [CAUSE]: dict(run.summary) doesn't recursively convert nested objects
+    # [FIX]: Use convert_to_serializable to recursively convert all W&B objects
+    #
+    # [OLD CODE]:
+    # summary = dict(run.summary)
+    # config = dict(run.config)
+    #
+    # [NEW CODE]:
+    summary = convert_to_serializable(dict(run.summary))
+    config = convert_to_serializable(dict(run.config))
     
     return {
         "history": history,
