@@ -1,0 +1,43 @@
+# Proposed method: Selective Falsification-Weighted Self-Consistency (SFw-SC-CoT)
+# Model: gpt-4o-mini, Dataset: GSM8K
+
+run_id: proposed-gpt4o-mini-gsm8k
+
+method:
+  type: proposed
+  name: SFw-SC-CoT
+  description: "Selective Falsification-Weighted Self-Consistency with answer-level falsification verification"
+  
+  # Chain-of-thought sampling
+  sampling:
+    num_samples: 8  # K samples per problem
+    temperature: 0.7
+    max_tokens: 512
+  
+  # Falsification verification (answer-level)
+  verification:
+    enabled: true
+    max_rationales_per_hypothesis: 2  # L representative rationales to show verifier
+    
+  # Aggregation weights
+  aggregation:
+    alpha: 0.5  # frequency weight exponent (down-weighted)
+    beta: 1.0   # confidence weight exponent
+    gamma: 1.0  # checks-passed weight exponent
+
+model:
+  name: gpt-4o-mini
+  provider: openai
+  base_model: gpt-4o-mini-2024-07-18
+  api_key_env: OPENAI_API_KEY
+
+dataset:
+  name: gsm8k
+  split: test
+  max_samples: 200  # Full test set for main mode
+  subset_name: main
+
+inference:
+  batch_size: 1
+  cache_dir: .cache
+  seed: 42

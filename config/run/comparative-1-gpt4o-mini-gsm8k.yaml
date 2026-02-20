@@ -1,0 +1,42 @@
+# Baseline method: Standard Self-Consistency (SC)
+# Model: gpt-4o-mini, Dataset: GSM8K
+
+run_id: comparative-1-gpt4o-mini-gsm8k
+
+method:
+  type: comparative-1
+  name: SC
+  description: "Standard Self-Consistency with majority voting"
+  
+  # Chain-of-thought sampling (same as proposed for fair comparison)
+  sampling:
+    num_samples: 8  # K samples per problem
+    temperature: 0.7
+    max_tokens: 512
+  
+  # No verification for baseline
+  verification:
+    enabled: false
+    
+  # Simple majority vote (frequency only)
+  aggregation:
+    alpha: 1.0  # frequency weight exponent (standard majority vote)
+    beta: 0.0   # no confidence weighting
+    gamma: 0.0  # no checks weighting
+
+model:
+  name: gpt-4o-mini
+  provider: openai
+  base_model: gpt-4o-mini-2024-07-18
+  api_key_env: OPENAI_API_KEY
+
+dataset:
+  name: gsm8k
+  split: test
+  max_samples: 200  # Full test set for main mode
+  subset_name: main
+
+inference:
+  batch_size: 1
+  cache_dir: .cache
+  seed: 42
