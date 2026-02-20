@@ -583,5 +583,91 @@
     "experimental_code": "import re\nfrom collections import defaultdict, Counter\n\nimport torch\nfrom datasets import load_dataset\nfrom transformers import AutoTokenizer, AutoModelForSeq2SeqLM\n\n# ----------------- Model -----------------\nmodel_name = \"google/flan-t5-base\"\ntok = AutoTokenizer.from_pretrained(model_name)\nmodel = AutoModelForSeq2SeqLM.from_pretrained(model_name)\nmodel.eval()\n\n@torch.no_grad()\ndef gen_text(prompt, max_new_tokens=256, temperature=0.7, top_p=0.95):\n    inputs = tok(prompt, return_tensors=\"pt\", truncation=True)\n    out = model.generate(\n        **inputs,\n        do_sample=(temperature > 0),\n        temperature=temperature,\n        top_p=top_p,\n        max_new_tokens=max_new_tokens,\n    )\n    return tok.decode(out[0], skip_special_tokens=True)\n\n# ----------------- Parsing -----------------\nnum_pat = re.compile(r\"[-+]?\\d*\\.?\\d+\")\nconf_pat = re.compile(r\"Confidence\\s*:\\s*([01](?:\\.\\d+)?)\", re.I)\npass_pat = re.compile(r\"ChecksPassed\\s*:\\s*([0-3])\\s*/\\s*3\", re.I)\n\ndef extract_final_number(text: str):\n    nums = num_pat.findall(text.replace(\",\", \"\"))\n    return nums[-1] if nums else None\n\ndef pick_representatives(rationales, L=2):\n    # shortest rationales reduce prompt length and often reduce hallucinated fluff\n    rationales = [r for r in rationales if isinstance(r, str) and len(r.strip()) > 0]\n    rationales.sort(key=len)\n    return rationales[:L]\n\n# ----------------- Prompts -----------------\nCOT_PROMPT = (\n    \"Solve step by step. End with 'Answer: <number>'.\\n\\n\"\n    \"Problem: {q}\\n\"\n)\n\n# Falsification-style verification at the ANSWER level\nVERIFY_ANSWER_PROMPT = (\n    \"You are a careful checker. A proposed final answer is given. \"\n    \"Try to DISPROVE the answer with quick sanity checks.\\n\\n\"\n    \"Do exactly 3 checks:\\n\"\n    \"1) Magnitude/estimation check (is the order of magnitude reasonable?)\\n\"\n    \"2) Alternative quick recomputation (different approach, brief)\\n\"\n    \"3) Constraint check (units, parity, bounds, or consistency with the story)\\n\\n\"\n    \"Then output ONLY these two lines:\\n\"\n    \"ChecksPassed: m/3\\n\"\n    \"Confidence: x\\n\\n\"\n    \"Problem: {q}\\n\\n\"\n    \"Proposed final answer: {a}\\n\\n\"\n    \"Representative solutions that reached this answer:\\n{reps}\\n\"\n)\n\ndef verify_answer(q, a, reps, max_new_tokens=160):\n    reps_block = \"\\n---\\n\".join(reps) if reps else \"(no rationale provided)\"\n    prompt = VERIFY_ANSWER_PROMPT.format(q=q, a=a, reps=reps_block)\n    v = gen_text(prompt, max_new_tokens=max_new_tokens, temperature=0.0, top_p=1.0)\n\n    m_conf = conf_pat.search(v)\n    m_pass = pass_pat.search(v)\n\n    c = float(m_conf.group(1)) if m_conf else 0.5\n    c = min(1.0, max(0.0, c))\n\n    p = int(m_pass.group(1)) if m_pass else 1  # conservative fallback\n    p = min(3, max(0, p))\n    return c, p\n\n# ----------------- Baselines -----------------\n\ndef cot_single(q):\n    sol = gen_text(COT_PROMPT.format(q=q), temperature=0.0, top_p=1.0)\n    return extract_final_number(sol)\n\n\ndef self_consistency(q, K=10):\n    answers = []\n    for _ in range(K):\n        sol = gen_text(COT_PROMPT.format(q=q), temperature=0.7, top_p=0.95)\n        a = extract_final_number(sol)\n        if a is not None:\n            answers.append(a)\n    return Counter(answers).most_common(1)[0][0] if answers else None\n\n\ndef cw_self_consistency(q, K=10):\n    # per-sample confidence (compute-heavy baseline)\n    weighted = defaultdict(float)\n    for _ in range(K):\n        sol = gen_text(COT_PROMPT.format(q=q), temperature=0.7, top_p=0.95)\n        a = extract_final_number(sol)\n        if a is None:\n            continue\n        # simple self-confidence prompt\n        v = gen_text(\n            f\"Given the problem and solution, output only 'Confidence: x' in [0,1].\\n\\nProblem: {q}\\n\\nSolution:\\n{sol}\\n\",\n            max_new_tokens=32,\n            temperature=0.0,\n            top_p=1.0,\n        )\n        m = conf_pat.search(v)\n        c = float(m.group(1)) if m else 0.5\n        c = min(1.0, max(0.0, c))\n        weighted[a] += c\n    return max(weighted.items(), key=lambda kv: kv[1])[0] if weighted else None\n\n# ----------------- Proposed: SFw-SC -----------------\n\ndef sfw_self_consistency(q, K=10, L=2, alpha=0.5, beta=1.0, gamma=1.0):\n    # 1) sample K chains\n    groups = defaultdict(list)  # answer -> list of rationales\n    for _ in range(K):\n        sol = gen_text(COT_PROMPT.format(q=q), temperature=0.7, top_p=0.95)\n        a = extract_final_number(sol)\n        if a is not None:\n            groups[a].append(sol)\n\n    if not groups:\n        return None\n\n    # 2) verify each unique answer once\n    scores = {}\n    for a, sols in groups.items():\n        reps = pick_representatives(sols, L=L)\n        c, p = verify_answer(q, a, reps)\n        freq = len(sols) / K\n        # 3) budget-aware aggregation\n        score = (freq ** alpha) * (c ** beta) * ((p / 3) ** gamma)\n        scores[a] = score\n\n    return max(scores.items(), key=lambda kv: kv[1])[0]\n\n# ----------------- Quick experiment -----------------\n\nds = load_dataset(\"gsm8k\", \"main\", split=\"test\")\nN = 100\nK = 10\n\nacc = {\"cot\": 0, \"sc\": 0, \"cw_sc\": 0, \"sfw_sc\": 0}\n\nfor i in range(N):\n    q = ds[i][\"question\"]\n    gt = extract_final_number(ds[i][\"answer\"])\n\n    pred_cot = cot_single(q)\n    pred_sc = self_consistency(q, K=K)\n    pred_cw = cw_self_consistency(q, K=K)\n    pred_sfw = sfw_self_consistency(q, K=K)\n\n    acc[\"cot\"] += int(pred_cot == gt)\n    acc[\"sc\"] += int(pred_sc == gt)\n    acc[\"cw_sc\"] += int(pred_cw == gt)\n    acc[\"sfw_sc\"] += int(pred_sfw == gt)\n\nprint({k: v / N for k, v in acc.items()})\n",
     "expected_result": "On GSM8K (N=100, flan-t5-base, K=10):\n- CoT-single: accuracy ≈ 0.18–0.28\n- SC (unweighted): accuracy ≈ 0.20–0.32\n- CW-SC (per-sample confidence; K verifications): accuracy ≈ 0.22–0.35\n- SFw-SC (proposed; U verifications where U≪K): accuracy ≈ 0.24–0.38\n\nExpected absolute gain over SC: +0.03 to +0.06 accuracy.\nExpected gain over CW-SC: +0.01 to +0.03 accuracy, *while using fewer verifier calls* (typically U≈2–5 vs K=10) and shorter verifier prompts (only L=2 representative chains). This is where the method’s practical significance appears: higher accuracy at comparable or lower verification compute.\n\nQualitative expectation: SFw-SC reduces cases where a common wrong answer dominates due to a shared misconception because falsification checks penalize answers that fail basic constraints even if frequent.",
     "expected_conclusion": "A prompt-only, human-inspired aggregation rule can improve both *robustness* and *sample-efficiency* of self-consistency on smaller/cheaper LLMs.\n\nAcademic value: the hypothesis reframes SC aggregation as hypothesis testing: generate diverse candidate answers, then perform structured falsification to score each hypothesis. This is more than “ask for confidence”—it probes when LLMs can execute quick independent checks and whether checklist-based signals correlate with correctness better than raw self-confidence.\n\nPractical/social value: by verifying only unique answer hypotheses (U≪K), the method targets real deployment constraints (latency/energy). If validated, it offers a simple way to make multi-step reasoning more reliable on commodity models without fine-tuning, making higher-quality reasoning accessible in low-resource settings."
+  },
+  "experimental_design": {
+    "experiment_summary": "Task: Given a natural-language multi-step math word problem, the model must produce a final numeric answer. We test whether Selective Falsification-Weighted Self-Consistency (SFw-SC-CoT) yields higher answer accuracy than standard Self-Consistency (SC) under a realistic inference budget on a smaller/cheaper model.\n\nWorkflow (inference-only, prompt-only; no fine-tuning):\n1) Chain sampling: For each problem, sample K diverse chain-of-thought (CoT) solutions with temperature>0, producing pairs (r_i, a_i) where a_i is the extracted final numeric answer.\n2) Hypothesis formation: Cluster samples by identical extracted final answer a (answer hypotheses). Let G(a) be the set of rationales ending in a.\n3) Selective falsification verification (answer-level): For each unique answer hypothesis a (U unique answers, typically 2–5), run one deterministic verifier prompt that tries to DISPROVE a using three explicit sanity checks (estimation, alternative recomputation, constraint check). The verifier outputs (i) Confidence c(a) in [0,1], and (ii) ChecksPassed p(a) in {0,1,2,3}. The verifier is shown the problem, the proposed answer, and up to L representative rationales (choose the shortest L from G(a) to minimize tokens and reduce overfitting to a verbose chain).\n4) Aggregation: Compute a budget-aware score per hypothesis:\n   score(a) = (|G(a)|/K)^α · (c(a))^β · (p(a)/3)^γ\n   with fixed exponents α=0.5, β=1, γ=1 (frequency is down-weighted to reduce shared-misconception brittleness).\n5) Prediction: Return argmax_a score(a).\n\nComparison: Standard SC uses the same K sampled CoT solutions but aggregates only by majority vote over extracted answers.\n\nScale/budgeting to fit the provided Runner (NVIDIA H200 140GB VRAM, 240GB RAM):\n- Model is small (~250M params), so GPU memory is not the limiting factor; throughput is. We cap evaluation to subsets to keep wall-clock reasonable while still producing statistically meaningful deltas.\n- Recommended default run (fits comfortably):\n  * Datasets: GSM8K test (N=500) + SVAMP test (N=500)\n  * K in {10, 20} (two settings) with temperature=0.7, top_p=0.95\n  * L=2 representative rationales per hypothesis\n  * Deterministic verifier (temperature=0)\n- Use bf16 inference on GPU (`torch_dtype=bfloat16`, `device_map=\"auto\"`) and batched generation where possible. Log U (# unique answers), #verifier calls, and approximate generated tokens to quantify compute.\n\nSuccess criterion: SFw-SC-CoT improves the primary metric (accuracy) over SC at the same K, and shows higher accuracy per verifier call (since it verifies U≪K hypotheses rather than K samples).",
+    "runner_config": {
+      "runner_label": [
+        "self-hosted",
+        "gpu-runner"
+      ],
+      "description": "NVIDIA H200, VRAM: 140 GB, RAM: 240 GB"
+    },
+    "evaluation_metrics": [
+      {
+        "name": "accuracy",
+        "description": "Correctness criteria: A prediction is correct if the extracted final numeric value from the model output equals the ground-truth numeric answer after normalization. Normalization: remove commas, trim spaces, convert to a canonical decimal string; treat integers and decimals as equal if they represent the same numeric value (e.g., \"5\" == \"5.0\"). For SVAMP/GSM8K, extract the final number as the last occurring numeric token in the model output (regex) OR a number following the tag `Answer:` if present; apply the same extractor to ground-truth rationale to obtain the label.\n\nCalculation method: accuracy = (1/N) * Σ_i 1[ pred_i == gt_i ]. Report separately per dataset and averaged across datasets (macro-average).\n\nTask appropriateness: The task is single-answer quantitative problem solving; exact numeric correctness is the relevant success criterion.\n\nRelevant visualizations: (i) Bar chart of accuracy by method and by K, (ii) Accuracy vs. K line plot, (iii) Scatter plot of per-problem difficulty proxy (e.g., SC vote margin) vs. correctness."
+      },
+      {
+        "name": "compute_efficiency",
+        "description": "Correctness criteria: Not a correctness metric; measures inference-budget efficiency to support the hypothesis that answer-level verification improves sample-efficiency.\n\nCalculation method: For each method, log: total_model_calls = N*(K + verifier_calls_per_problem) where verifier_calls_per_problem=0 for SC and =U for SFw-SC. Also log generated_tokens_generation and generated_tokens_verification (approximate by summing `len(tokenizer(output_ids))`). Define compute_efficiency as accuracy / (mean_total_model_calls_per_problem) and optionally accuracy / (mean_total_generated_tokens_per_problem).\n\nTask appropriateness: The hypothesis emphasizes gains under fixed inference budget (latency/energy). This metric quantifies accuracy per unit of compute.\n\nRelevant visualizations: (i) Accuracy vs. mean total calls scatter (Pareto frontier), (ii) Stacked bar chart of token usage split into generation vs verification."
+      },
+      {
+        "name": "falsification_signal_quality",
+        "description": "Correctness criteria: Measures whether verifier outputs (ChecksPassed, Confidence) correlate with actual correctness of the answer hypothesis.\n\nCalculation method: Over all verified hypotheses (across problems), compute: (a) AUROC of using c(a) to predict whether hypothesis a is correct (1 if a==gt else 0), (b) Spearman correlation between p(a) and correctness, (c) calibration curve / Expected Calibration Error (ECE) for c(a) binned into 10 bins.\n\nTask appropriateness: The proposed method relies on structured falsification signals being more informative than raw frequency. These diagnostics validate the mechanism.\n\nRelevant visualizations: (i) Reliability diagram for confidence, (ii) Box plots of confidence stratified by correct/incorrect hypotheses, (iii) Histogram of ChecksPassed for correct vs incorrect."
+      }
+    ],
+    "models_to_use": [
+      "google/flan-t5-base (250M params)"
+    ],
+    "datasets_to_use": [
+      "GSM8K",
+      "SVAMP"
+    ],
+    "proposed_method": {
+      "method_name": "Selective Falsification-Weighted Self-Consistency (SFw-SC-CoT)",
+      "description": "Inference-only, prompt-only aggregation for CoT self-consistency that clusters sampled chains by final answer and verifies only each unique answer hypothesis via a falsification-style checklist (estimation, alternative recomputation, constraint check). Final selection uses a budget-aware score combining down-weighted frequency with verifier confidence and checks-passed signals, improving robustness to shared misconceptions while reducing verifier calls from K to U (U≪K).",
+      "optuna_config": {
+        "enabled": true,
+        "n_trials": 12,
+        "search_spaces": [
+          {
+            "param_name": "alpha",
+            "distribution_type": "uniform",
+            "low": 0.2,
+            "high": 1.0
+          },
+          {
+            "param_name": "beta",
+            "distribution_type": "uniform",
+            "low": 0.5,
+            "high": 2.0
+          },
+          {
+            "param_name": "gamma",
+            "distribution_type": "uniform",
+            "low": 0.5,
+            "high": 2.0
+          },
+          {
+            "param_name": "L",
+            "distribution_type": "categorical",
+            "choices": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "param_name": "K",
+            "distribution_type": "categorical",
+            "choices": [
+              10,
+              20
+            ]
+          }
+        ]
+      }
+    },
+    "comparative_methods": [
+      {
+        "method_name": "Standard Self-Consistency (SC) Majority Vote",
+        "description": "Baseline CoT self-consistency: sample K stochastic chains and return the most frequent extracted final answer. Treats chains as exchangeable and uses frequency as a proxy for correctness; no explicit falsification/verification stage.",
+        "optuna_config": {
+          "enabled": false,
+          "n_trials": 20
+        }
+      }
+    ]
   }
 }
