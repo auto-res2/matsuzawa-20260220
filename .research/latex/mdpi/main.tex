@@ -175,7 +175,9 @@ Let $q$ denote a natural-language problem. A stochastic CoT generator produces $
 Standard SC aggregates by majority vote over extracted final answers, returning $\arg\max_a |G(a)|$~\cite{das-2022-self}. In effect, it estimates that an answer is correct if it is sampled most frequently among the $K$ chains.
 
 \subsection{Answer extraction and normalization}
-The implementation extracts a final numeric answer from a rationale using a prioritized list of regular expressions. These patterns are designed to handle common answer formats observed in practice, including GSM8K-style \mbox{``\#\#\#\# 42''}, explicit ``Answer:'' phrases, markdown bold numbers, and boxed answers, with a final permissive fallback that selects the last number appearing in the text. Ground-truth labels are extracted from GSM8K solutions primarily using the ``\#\#\#\#'' delimiter. For evaluation, predicted and ground-truth answers are normalized by removing commas, stripping certain symbols such as ``\$'', removing spaces, and converting to a canonical numeric string so that integer and decimal representations (for example, ``5'' and ``5.0'') compare as equal.
+The implementation extracts a final numeric answer from a rationale using a prioritized list of regular expressions. These patterns are designed to handle common answer formats observed in practice, including GSM8K-style boxed numbers like \mbox{``\#\#\#\# 42''}, explicit Answer phrases, markdown bold numbers, and other answer formats, with a final permissive fallback that selects the last number appearing in the text.
+
+Ground-truth labels are extracted from GSM8K solutions primarily using the \#\#\#\# delimiter. For evaluation, predicted and ground-truth answers are normalized by removing commas and spaces, stripping certain symbols like the dollar sign, and converting to a canonical numeric string. This allows integer and decimal representations to compare as equal, for instance 5 and 5.0.
 
 \subsection{Answer-hypothesis verification signals}
 SFw-SC-CoT introduces verification at the level of answer hypotheses. For each candidate answer $a$, a verifier prompt is constructed from the problem $q$, the proposed answer $a$, and up to $L$ representative rationales from $G(a)$. Representatives are selected by sorting rationales by length and choosing the shortest ones, reducing prompt length and limiting reliance on a single verbose chain. The verifier is instructed to attempt falsification via three sanity checks: (1) estimation or order-of-magnitude reasoning, (2) a brief alternative recomputation, and (3) a constraint check for consistency with the problem statement. The verifier output is parsed to obtain two scalars: confidence $c(a) \in [0,1]$ and checks\_passed $p(a) \in \{0,1,2,3\}$. These signals serve as inputs to the proposed aggregation rule.
@@ -195,7 +197,7 @@ Third, it verifies each answer hypothesis once using a deterministic verifier pr
 
 Fourth, it computes a score for each hypothesis and returns the highest-scoring answer. The aggregation rule is multiplicative and exponentiated:
 \[
-\mathrm{score}(a) = \left(\frac{|G(a)|}{K}\right)^{{\alpha}} \cdot \left(c(a)\right)^{{\beta}} \cdot \left(\frac{p(a)}{3}\right)^{{\gamma}}.
+\mathrm{score}(a) = {\left(\frac{|G(a)|}{K}\right)}^{{\alpha}} \cdot {\left(c(a)\right)}^{{\beta}} \cdot {\left(\frac{p(a)}{3}\right)}^{{\gamma}}.
 \]
 In the executed proposed configuration, $\alpha = 0.5$, $\beta = 1.0$, and $\gamma = 1.0$. Compared with SC majority vote (which corresponds to $\alpha = 1$ and omits verification terms), this choice down-weights the impact of raw frequency so that a frequent hypothesis can be penalized if it fails falsification checks or receives low verifier confidence. The checks\_passed term is normalized by $3$ to map it into $[0,1]$. If parsing fails, the parser defaults checks\_passed to $0$ and confidence to $0.5$ and clips both to valid ranges.
 
@@ -204,16 +206,16 @@ The key design choice is verifying answer hypotheses rather than individual chai
 \begin{algorithm}[H]
 \caption{SFw-SC-CoT (Selective Falsification-Weighted Self-Consistency)}
 \begin{algorithmic}[1]
-\State \textbf{Input:} problem $q$, sampler, verifier, sample count $K$, reps limit $L$, exponents $\alpha,\beta,\gamma$
-\State Sample CoT rationales $\{r_i\}_{i=1}^K$ with stochastic decoding
-\State Extract answers $a_i \leftarrow \mathrm{Extract}(r_i)$ for $i \in \{1,\ldots,K\}$
-\State Group rationales by answer: $G(a) \leftarrow \{r_i : a_i = a\}$ for each unique $a$
+\State{} \textbf{Input:} problem $q$, sampler, verifier, sample count $K$, reps limit $L$, exponents $\alpha,\beta,\gamma$
+\State{} Sample CoT rationales ${\{r_i\}}_{i=1}^{K}$ with stochastic decoding
+\State{} Extract answers $a_i \leftarrow \mathrm{Extract}(r_i)$ for $i \in \{1,\ldots,K\}$
+\State{} Group rationales by answer: $G(a) \leftarrow \{r_i : a_i = a\}$ for each unique $a$
 \For{each unique answer $a$}
-  \State Select representatives $R(a) \leftarrow$ shortest $\min(L, |G(a)|)$ rationales from $G(a)$
-  \State $(c(a), p(a)) \leftarrow \mathrm{Verify}(q, a, R(a))$ \Comment{deterministic, falsification checks}
-  \State $s(a) \leftarrow \left(\frac{|G(a)|}{K}\right)^{{\alpha}} \cdot \left(c(a)\right)^{{\beta}} \cdot \left(\frac{p(a)}{3}\right)^{{\gamma}}$
-\EndFor
-\State \textbf{Return} $\arg\max_a s(a)$
+  \State{} Select representatives $R(a) \leftarrow$ shortest $\min(L, |G(a)|)$ rationales from $G(a)$
+  \State{} $(c(a), p(a)) \leftarrow \mathrm{Verify}(q, a, R(a))$ \Comment{deterministic, falsification checks}
+  \State{} $s(a) \leftarrow {\left(\frac{|G(a)|}{K}\right)}^{{\alpha}} \cdot {\left(c(a)\right)}^{{\beta}} \cdot {\left(\frac{p(a)}{3}\right)}^{{\gamma}}$
+\EndFor{}
+\State{} \textbf{Return} $\arg\max_a s(a)$
 \end{algorithmic}
 \end{algorithm}
 
@@ -226,7 +228,7 @@ We evaluate SFw-SC-CoT against a standard self-consistency baseline on GSM8K. Th
 The task is to answer multi-step math word problems with a single numeric output. We use the GSM8K dataset, main subset, test split. The dataset is loaded via the HuggingFace datasets interface under the identifier \texttt{openai/gsm8k} with subset \texttt{main}. The run configuration sets max\_samples to $200$, and the logs indicate that exactly $N = 200$ test problems were processed.
 
 \subsection{Model and access method}
-Both baseline and proposed methods use the same model: gpt-4o-mini with base\_model gpt-4o-mini-2024-07-18 accessed through the OpenAI chat completions API\@. The codebase wraps the API in an \texttt{LLMModel} class that issues a separate generation call for each prompt.
+Both baseline and proposed methods use the same model: gpt-4o-mini with base\_model gpt-4o-mini-2024--07--18 accessed through the OpenAI chat completions API\@. The codebase wraps the API in an \texttt{LLMModel} class that issues a separate generation call for each prompt.
 
 \subsection{Generation and sampling protocol}
 For each problem, both methods generate $K = 8$ chain-of-thought samples using temperature $0.7$ and max\_tokens $512$. Inference uses batch\_size $1$. Each completion is post-processed using the \texttt{extract\_final\_answer} function described in the Background section.
@@ -306,7 +308,7 @@ The current evaluation also highlights clear next steps. The logs do not report 
 \vspace{6pt}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\authorcontributions{For research articles with several authors, a short paragraph specifying their individual contributions must be provided. The following statements should be used: ``Conceptualization, X.X. and Y.Y.; methodology, X.X.; software, X.X.; validation, X.X., Y.Y. and Z.Z.; formal analysis, X.X.; investigation, X.X.; resources, X.X.; data curation, X.X.; writing---original draft preparation, X.X.; writing---review and editing, X.X.; visualization, X.X.; supervision, X.X.; project administration, X.X.; funding acquisition, Y.Y. All authors have read and agreed to the published version of the manuscript.'', please turn to the  \href{http://img.mdpi.org/data/contributor-role-instruction.pdf}{CRediT taxonomy} for the term explanation. Authorship must be limited to those who have contributed substantially to the work~reported.}
+\authorcontributions{For research articles with several authors, a short paragraph specifying their individual contributions must be provided. The following statements should be used: ``Conceptualization, X.X. and Y.Y.; methodology, X.X.; software, X.X.; validation, X.X., Y.Y. and Z.Z.; formal analysis, X.X.; investigation, X.X.; resources, X.X.; data curation, X.X.; writing---original draft preparation, X.X.; writing---review and editing, X.X.; visualization, X.X.; supervision, X.X.; project administration, X.X.; funding acquisition, Y.Y. All authors have read and agreed to the published version of the manuscript'', please turn to the  \href{http://img.mdpi.org/data/contributor-role-instruction.pdf}{CRediT taxonomy} for the term explanation. Authorship must be limited to those who have contributed substantially to the work~reported.}
 
 \funding{This research received no external funding.}
 
