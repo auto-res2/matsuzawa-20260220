@@ -2,7 +2,7 @@
 %  For support, please attach all files needed for compiling as well as the log file, and specify your operating system, LaTeX version, and LaTeX editor.
 
 %=================================================================
-\documentclass[journal,article,submit,pdftex,moreauthors]{Definitions/mdpi}
+\documentclass[journal,article,accept,pdftex,moreauthors]{Definitions/mdpi}
 
 %=================================================================
 % MDPI internal commands - do not modify
@@ -33,6 +33,7 @@
 % cleveref: load \crefname definitions after \begin{document}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+\AtBeginDocument{\setkeys{Gin}{draft=false}}
 
 %=================================================================
 % Please use the following mathematics environments: Theorem, Lemma, Corollary, Proposition, Characterization, Property, Problem, Example, ExamplesandDefinitions, Hypothesis, Remark, Definition, Notation, Assumption
