@@ -1,0 +1,18 @@
+{
+  "primary_metric": "accuracy",
+  "metrics_by_run": {
+    "comparative-1-gpt4o-mini-gsm8k": {
+      "accuracy": 0.93,
+      "num_correct": 186,
+      "num_total": 200
+    },
+    "proposed-gpt4o-mini-gsm8k": {
+      "accuracy": 0.94,
+      "num_correct": 188,
+      "num_total": 200
+    }
+  },
+  "best_proposed": "proposed-gpt4o-mini-gsm8k",
+  "best_baseline": "comparative-1-gpt4o-mini-gsm8k",
+  "gap": 0.009999999999999898
+}

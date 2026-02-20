@@ -1,0 +1,61 @@
+{
+  "summary": {
+    "_runtime": 1801,
+    "_step": 199,
+    "_timestamp": 1771583332.8833692,
+    "_wandb": {
+      "runtime": 1801
+    },
+    "accuracy": 0.93,
+    "num_correct": 186,
+    "num_total": 200
+  },
+  "config": {
+    "run": {
+      "model": {
+        "name": "gpt-4o-mini",
+        "provider": "openai",
+        "base_model": "gpt-4o-mini-2024-07-18",
+        "api_key_env": "OPENAI_API_KEY"
+      },
+      "method": {
+        "name": "SC",
+        "type": "comparative-1",
+        "sampling": {
+          "max_tokens": 512,
+          "num_samples": 8,
+          "temperature": 0.7
+        },
+        "aggregation": {
+          "beta": 0,
+          "alpha": 1,
+          "gamma": 0
+        },
+        "description": "Standard Self-Consistency with majority voting",
+        "verification": {
+          "enabled": false
+        }
+      },
+      "run_id": "comparative-1-gpt4o-mini-gsm8k",
+      "dataset": {
+        "name": "gsm8k",
+        "split": "test",
+        "max_samples": 200,
+        "subset_name": "main"
+      },
+      "inference": {
+        "seed": 42,
+        "cache_dir": ".cache",
+        "batch_size": 1
+      }
+    },
+    "mode": "main",
+    "wandb": {
+      "mode": "online",
+      "entity": "airas",
+      "project": "2026-0220-1631"
+    },
+    "results_dir": ".research/results"
+  },
+  "url": "https://wandb.ai/airas/2026-0220-1631/runs/96zkzt7d"
+}

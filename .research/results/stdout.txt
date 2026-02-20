@@ -1,0 +1,30 @@
+=== [VISUALIZATION] Start at Fri Feb 20 12:34:42 UTC 2026 ===
+Evaluating runs: ['comparative-1-gpt4o-mini-gsm8k', 'proposed-gpt4o-mini-gsm8k']
+WandB entity: airas
+WandB project: 2026-0220-1631
+
+Fetching data for: comparative-1-gpt4o-mini-gsm8k
+  URL: https://wandb.ai/airas/2026-0220-1631/runs/96zkzt7d
+
+Fetching data for: proposed-gpt4o-mini-gsm8k
+  URL: https://wandb.ai/airas/2026-0220-1631/runs/f40ombyj
+
+================================================================================
+Exporting per-run metrics and figures...
+================================================================================
+Exported metrics: .research/results/comparative-1-gpt4o-mini-gsm8k/metrics.json
+Created figure: .research/results/comparative-1-gpt4o-mini-gsm8k/comparative-1-gpt4o-mini-gsm8k_accuracy.pdf
+Exported metrics: .research/results/proposed-gpt4o-mini-gsm8k/metrics.json
+Created figure: .research/results/proposed-gpt4o-mini-gsm8k/proposed-gpt4o-mini-gsm8k_accuracy.pdf
+
+================================================================================
+Creating comparison metrics and figures...
+================================================================================
+Exported aggregated metrics: .research/results/comparison/aggregated_metrics.json
+Created comparison figure: .research/results/comparison/comparison_accuracy.pdf
+Created comparison figure: .research/results/comparison/comparison_accuracy_over_time.pdf
+
+================================================================================
+Evaluation completed successfully!
+================================================================================
+=== [VISUALIZATION] PASSED at Fri Feb 20 12:34:51 UTC 2026 ===
